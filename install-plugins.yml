@@ -1,0 +1,148 @@
+
+
+### Plugin codename list ###
+
+# Pipeline - workflow-aggregator
+# Pipeline Utility Steps - pipeline-utility-steps
+# Nexus Platform Plugin - nexus-jenkins-plugin
+# Nexus Artifact Uploader - nexus-artifact-uploader
+# Blue Ocean - blueocean
+# Role-based Authorization Strategy - role-strategy
+# Workspace Cleanup Plugin - ws-cleanup
+# Job Configuration History - jobConfigHistory
+# Build user vars - build-user-vars-plugin
+# Dashboard View - dashboard-view
+# Folders - cloudbees-folder
+# Monitoring - ???
+# disk-usage - cloudbees-disk-usage-simple
+
+
+
+
+---
+- name: Jenkins Master play
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: true
+  
+  vars:
+    my_jenkins_plugins:
+      workflow-aggregator:
+        enabled: yes
+        state: latest
+      pipeline-utility-steps:
+        enabled: yes
+        state: disabled
+      nexus-jenkins-plugin:
+        enabled: yes
+        state: latest
+      nexus-artifact-uploader:
+        enabled: yes
+        state: latest
+      blueocean:
+        enabled: yes
+        state: latest
+      role-strategy:
+        enabled: yes
+        state: latest
+      ws-cleanup:
+        enabled: yes
+        state: latest
+      jobConfigHistory:
+        enabled: yes
+        state: latest
+      build-user-vars-plugin:
+        enabled: yes
+        state: latest
+      dashboard-view:
+        enabled: yes
+        state: latest
+      cloudbees-folder:
+        enabled: yes
+        state: latest
+#      monitoring:
+#        enabled: yes
+#        state: latest
+      cloudbees-disk-usage-simple:
+        enabled: yes
+        state: latest
+
+  tasks:
+    - name: Install plugins without a specific version
+      jenkins_plugin:
+        url_username: admin
+        url_password: 8120ae6fe77f48ce8242c75c6025794f
+        name: "{{ item.key }}"
+      register: my_jenkins_plugin_unversioned
+      when: >
+        'version' not in item.value
+      with_dict: "{{ my_jenkins_plugins }}"
+
+    - name: Install plugins with a specific version
+      jenkins_plugin:
+        name: "{{ item.key }}"
+        version: "{{ item.value['version'] }}"
+      register: my_jenkins_plugin_versioned
+      when: >
+        'version' in item.value
+      with_dict: "{{ my_jenkins_plugins }}"
+
+    - name: Initialize jenkins_restart_required
+      set_fact:
+        jenkins_restart_required: no
+
+    - name: Check if restart is required by any of the versioned plugins
+      set_fact:
+        jenkins_restart_required: yes
+      when: item.changed
+      with_items: "{{ my_jenkins_plugin_versioned.results }}"
+
+    - name: Check if restart is required by any of the unversioned plugins
+      set_fact:
+        jenkins_restart_required: yes
+      when: item.changed
+      with_items: "{{ my_jenkins_plugin_unversioned.results }}"
+      
+    - name: Plugin disabling
+      jenkins_plugin:
+        name: "{{ item.key }}"
+        state: "{{ 'disabled' if item.value['disabled'] }}"
+      when: >
+        'state' in item.value == 'disabled'
+      with_dict: "{{ my_jenkins_plugins }}"
+
+    - name: Restart Jenkins if required
+      service:
+        name: jenkins
+        state: restarted
+      when: jenkins_restart_required
+
+#    - name: Wait for Jenkins to start up
+#      uri:
+#        url: http://localhost:8080
+#        url_username: admin
+#        url_password: 8120ae6fe77f48ce8242c75c6025794f
+#        status_code: 200
+#        timeout: 5
+#      register: jenkins_service_status
+#      # Keep trying for 5 mins in 5 sec intervals
+#      retries: 60
+#      delay: 5
+#      until: >
+#         'status' in jenkins_service_status and
+#         jenkins_service_status['status'] == 200
+#      when: jenkins_restart_required
+
+#    - name: Reset the fact
+#      set_fact:
+#        jenkins_restart_required: no
+#      when: jenkins_restart_required
+
+#    - name: Plugin pinning
+#      jenkins_plugin:
+#        name: "{{ item.key }}"
+#        state: "{{ 'pinned' if item.value['pinned'] else 'unpinned'}}"
+#      when: >
+#        'pinned' in item.value
+#      with_dict: "{{ my_jenkins_plugins }}"
